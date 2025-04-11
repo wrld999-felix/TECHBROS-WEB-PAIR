@@ -20,6 +20,8 @@ function removeFile(FilePath) {
 
 router.get('/', async (req, res) => {
     let num = req.query.number;
+    if (!num) return res.status(400).send({ error: "Number parameter is required" });
+
     async function techbrosPair() {
         const { state, saveCreds } = await useMultiFileAuthState(`./session`);
         try {
@@ -33,44 +35,49 @@ router.get('/', async (req, res) => {
                 browser: Browsers.macOS("Safari"),
             });
 
-            if (!techbrosWeb.authState.creds.registered) {
-                await delay(1500);
-                num = num.replace(/[^0-9]/g, '');
-                const code = await techbrosWeb.requestPairingCode(num);
-                if (!res.headersSent) {
-                    await res.send({ code });
-                }
-            }
-
             techbrosWeb.ev.on('creds.update', saveCreds);
-            techbrosWeb.ev.on("connection.update", async (s) => {
-                const { connection, lastDisconnect } = s;
+            
+            techbrosWeb.ev.on("connection.update", async (update) => {
+                const { connection, lastDisconnect } = update;
+                
                 if (connection === "open") {
                     try {
-                        await delay(10000);
+                        // Ensure proper connection before proceeding
+                        await delay(3000);
+
+                        if (!techbrosWeb.authState.creds.registered) {
+                            num = num.replace(/[^0-9]/g, '');
+                            const code = await techbrosWeb.requestPairingCode(num);
+                            if (!res.headersSent) {
+                                res.send({ code });
+                            }
+                            return;
+                        }
+
+                        // Session handling after successful connection
                         const sessionTechbros = fs.readFileSync('./session/creds.json');
                         const auth_path = './session/';
                         const user_jid = jidNormalizedUser(techbrosWeb.user.id);
 
-                        function randomMegaId(length = 6, numberLength = 4) {
-                            const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-                            let result = '';
-                            for (let i = 0; i < length; i++) {
-                                result += characters.charAt(Math.floor(Math.random() * characters.length));
-                            }
-                            const number = Math.floor(Math.random() * Math.pow(10, numberLength));
-                            return `${result}${number}`;
-                        }
+                        // Generate MEGA URL
+                        const mega_url = await upload(
+                            fs.createReadStream(auth_path + 'creds.json'),
+                            `${Math.random().toString(36).substring(2, 15)}.json`
+                        );
 
-                        const mega_url = await upload(fs.createReadStream(auth_path + 'creds.json'), `${randomMegaId()}.json`);
+                        if (!mega_url) throw new Error("MEGA upload failed");
+
                         const string_session = mega_url.replace('https://mega.nz/file/', '');
                         const prefixedSid = `TECBROS-MD~${string_session.substring(0, 8)}#${string_session.substring(8, 12)}-${string_session.substring(12)}`;
 
-                        // Send the session ID alone
+                        // Send session ID first
                         await techbrosWeb.sendMessage(user_jid, { text: prefixedSid });
+                        
+                        // Add delay between messages
+                        await delay(2000);
 
-                        // Send the styled text and image
-                        const coolText = `*_Session Connected successfully_*\n*_Made With 🤍🙂_*\n______________________________________\n╭───❍*『AMAZING YOU'VE CHOSEN TECHBROS-MD』*\n│\n│ \n│   \n╰─────────────────────────❍\n╭───❍*『••• VISIT FOR HELP •••』*\n│❍ *Ytube:* __\n│❍ *Owners:* _https://wa.me/message/2349126807818|https://wa.me/message/2349126807818_\n│❍ *telegram:* __\n│❍ *Repo:* _https://github.com/_\n│❍ *WaGroup:* __\n│❍ *WaChannel:* __\n│*Plugins:* _coming soon🔜🥲_\n╰────────────────────────────❍\n> *_©2025 TECHBROS-MD_*\n_____________________________________\n\n_Don't Forget To Give Star To Our Repo_`;
+                        // Send media messages
+                        const coolText = `*_Session Connected successfully_*\n...`; // Keep your text
                         const imageUrl = 'https://i.ibb.co/wrhHm9YZ/file-181.jpg';
 
                         await techbrosWeb.sendMessage(user_jid, {
@@ -78,52 +85,64 @@ router.get('/', async (req, res) => {
                             caption: coolText
                         });
 
-                        // Sending audio
-                        const audioPath = './audio/pairing_success.mp3';
-                        const audioMimetype = 'audio/mpeg';
-
+                        // Add audio sending with proper error handling
                         try {
+                            const audioPath = './audio/pairing_success.mp3';
                             await techbrosWeb.sendMessage(
                                 user_jid,
                                 {
                                     audio: { url: audioPath },
-                                    mimetype: audioMimetype
+                                    mimetype: 'audio/mpeg'
                                 }
                             );
                         } catch (audioError) {
-                            console.error("Error sending audio:", audioError);
+                            console.error("Audio send error:", audioError.message);
                         }
 
                     } catch (e) {
+                        console.error("Connection error:", e);
                         exec('pm2 restart techbros-md');
+                        if (!res.headersSent) {
+                            res.status(500).send({ error: "Connection failed" });
+                        }
+                    } finally {
+                        // Cleanup after all operations complete
+                        await delay(5000);
+                        removeFile('./session');
                     }
-
-                    await delay(100);
-                    return await removeFile('./session');
-                    process.exit(0);
-                } else if (connection === "close" && lastDisconnect && lastDisconnect.error && lastDisconnect.error.output.statusCode !== 401) {
-                    await delay(10000);
-                    techbrosPair();
+                }
+                
+                if (connection === "close") {
+                    const shouldReconnect = lastDisconnect.error?.output?.statusCode !== 401;
+                    console.log("Connection closed, reconnecting:", shouldReconnect);
+                    if (shouldReconnect) {
+                        await delay(10000);
+                        techbrosPair();
+                    }
                 }
             });
+
         } catch (err) {
+            console.error("Initialization error:", err);
             exec('pm2 restart techbros-md');
-            console.log("service restarted");
-            techbrosPair();
-            await removeFile('./session');
             if (!res.headersSent) {
-                await res.send({ code: "Service Unavailable" });
+                res.status(500).send({ code: "Service Unavailable" });
             }
+            removeFile('./session');
         }
     }
-    return await techbrosPair();
+    
+    try {
+        await techbrosPair();
+    } catch (error) {
+        console.error("Pairing process failed:", error);
+        res.status(500).send({ error: "Pairing process failed" });
+    }
 });
 
 process.on('uncaughtException', function (err) {
-    console.log('Caught exception: ' + err);
+    console.log('Caught exception:', err);
     exec('pm2 restart techbros-md');
 });
 
-
 module.exports = router;
-                            
