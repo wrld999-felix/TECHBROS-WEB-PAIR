@@ -22,8 +22,9 @@ router.get('/', async (req, res) => {
     let num = req.query.number;
     async function TecbrosPair() {
         const { state, saveCreds } = await useMultiFileAuthState(`./session`);
+        let TecbrosPairWeb; // Declare outside the try block for wider scope
         try {
-            let TecbrosPairWeb = makeWASocket({
+            TecbrosPairWeb = makeWASocket({
                 auth: {
                     creds: state.creds,
                     keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
@@ -36,10 +37,18 @@ router.get('/', async (req, res) => {
             if (!TecbrosPairWeb.authState.creds.registered) {
                 await delay(1500);
                 num = num.replace(/[^0-9]/g, '');
-                const code = await TecbrosPairWeb.requestPairingCode(num);
-                if (!res.headersSent) {
-                    await res.send({ code });
+                try {
+                    const code = await TecbrosPairWeb.requestPairingCode(num);
+                    if (!res.headersSent) {
+                        await res.send({ code });
+                    }
+                } catch (pairingCodeError) {
+                    console.error("Error requesting pairing code:", pairingCodeError);
+                    if (!res.headersSent) {
+                        return res.send({ code: "Error requesting pairing code" });
+                    }
                 }
+                return; // Exit after sending the code or error
             }
 
             TecbrosPairWeb.ev.on('creds.update', saveCreds);
@@ -49,7 +58,6 @@ router.get('/', async (req, res) => {
                     try {
                         await delay(10000);
                         const sessionTecbros = fs.readFileSync('./session/creds.json');
-
                         const auth_path = './session/';
                         const user_jid = jidNormalizedUser(TecbrosPairWeb.user.id);
 
@@ -63,58 +71,43 @@ router.get('/', async (req, res) => {
                             return `${result}${number}`;
                         }
 
-                        const mega_url = await upload(fs.createReadStream(auth_path + 'creds.json'), `${randomMegaId()}.json`);
+                        let mega_url;
+                        try {
+                            mega_url = await upload(fs.createReadStream(auth_path + 'creds.json'), `${randomMegaId()}.json`);
+                        } catch (megaUploadError) {
+                            console.error("Error uploading to Mega:", megaUploadError);
+                            return; // Stop if Mega upload fails
+                        }
 
                         // Add TECHBROS-MD~ prefix and format the session ID
                         const string_session = mega_url.replace('https://mega.nz/file/', '');
                         const sid = `TECBROS-MD~${string_session.substring(0, 8)}#${string_session.substring(8, 12)}-${string_session.substring(12)}`;
 
-                        // Send session ID with prefix and formatting
-                        await TecbrosPairWeb.sendMessage(user_jid, { text: sid });
-
-                        // Send logo image with caption
-                        await TecbrosPairWeb.sendMessage(user_jid, {
-                            image: { url: "https://i.ibb.co/wrhHm9YZ/file-181.jpg" },
-                            caption: "*_Session Connected successfully_*\n*_Made With 🤍🙂_*"
-                        });
-
-                        // Send audio from local path
-                        const audioPath = './audio/techbros-audio.mp3';
-                        await TecbrosPairWeb.sendMessage(user_jid, {
-                            audio: {
-                                url: audioPath,
-                                mimetype: 'audio/mpeg'
-                            },
-                            ptt: true,
-                            waveform: new Uint8Array([128, 0, 250, 0, 250, 0, 250])
-                        });
-
-                        // Send formatted message
-                        const infoMsg = `______________________________________
-╭───❍*『AMAZING YOU'VE CHOSEN TECHBROS-MD』*
-│
-│
-│
-╰─────────────────────────❍
-╭───❍*『••• VISIT FOR HELP •••』*
-│❍ *Ytube:* __
-│❍ *Owners:* _https://wa.me/message/2349126807818_
-│❍ *telegram:* __
-│❍ *Repo:* _https://github.com/_
-│❍ *WaGroup:* __
-│❍ *WaChannel:* __
-│*Plugins:* _coming soon🔜🥲_
-╰────────────────────────────❍
-> *_©2025 TECHBROS-MD_*
-_____________________________________
-_Don't Forget To Give Star To Our Repo_`;
-
-                        await TecbrosPairWeb.sendMessage(user_jid, {
-                            text: infoMsg,
-                            contextInfo: {
-                                mentionedJid: [user_jid]
-                            }
-                        });
+                        try {
+                            await TecbrosPairWeb.sendMessage(user_jid, { text: sid });
+                            await TecbrosPairWeb.sendMessage(user_jid, {
+                                image: { url: "https://i.ibb.co/wrhHm9YZ/file-181.jpg" },
+                                caption: "*_Session Connected successfully_*\n*_Made With 🤍🙂_*"
+                            });
+                            const audioPath = './audio/techbros-audio.mp3';
+                            await TecbrosPairWeb.sendMessage(user_jid, {
+                                audio: {
+                                    url: audioPath,
+                                    mimetype: 'audio/mpeg'
+                                },
+                                ptt: true,
+                                waveform: new Uint8Array([128, 0, 250, 0, 250, 0, 250])
+                            });
+                            const infoMsg = `______________________________________\n╭───❍*『AMAZING YOU'VE CHOSEN TECHBROS-MD』*\n│\n│\n╰─────────────────────────❍\n╭───❍*『••• VISIT FOR HELP •••』*\n│❍ *Ytube:* __\n│❍ *Owners:* _https://wa.me/message/2349126807818_\n│❍ *telegram:* __\n│❍ *Repo:* _https://github.com/_\n│❍ *WaGroup:* __\n│❍ *WaChannel:* __\n│*Plugins:* _coming soon🔜🥲_\n╰────────────────────────────❍\n> *_©2025 TECHBROS-MD_*\n_____________________________________\n_Don't Forget To Give Star To Our Repo_`;
+                            await TecbrosPairWeb.sendMessage(user_jid, {
+                                text: infoMsg,
+                                contextInfo: {
+                                    mentionedJid: [user_jid]
+                                }
+                            });
+                        } catch (sendMessageError) {
+                            console.error("Error sending messages after connection:", sendMessageError);
+                        }
 
                     } catch (e) {
                         exec('pm2 restart tecbros');
@@ -124,13 +117,14 @@ _Don't Forget To Give Star To Our Repo_`;
                     await removeFile('./session');
                     process.exit(0);
                 } else if (connection === "close" && lastDisconnect && lastDisconnect.error && lastDisconnect.error.output.statusCode !== 401) {
+                    console.log("Connection closed due to error, reconnecting...", lastDisconnect.error);
                     await delay(10000);
                     TecbrosPair();
                 }
             });
         } catch (err) {
             exec('pm2 restart tecbros-md');
-            console.log("service restarted");
+            console.error("General pairing function error:", err); // Log the general error
             TecbrosPair();
             await removeFile('./session');
             if (!res.headersSent) {
@@ -142,9 +136,12 @@ _Don't Forget To Give Star To Our Repo_`;
 });
 
 process.on('uncaughtException', function (err) {
-    console.log('Caught exception: ' + err);
+    console.error('Caught unhandled exception:', err);
     exec('pm2 restart tecbros');
 });
 
 module.exports = router;
+                        
+
+
           
