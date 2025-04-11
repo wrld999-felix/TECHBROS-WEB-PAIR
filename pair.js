@@ -1,7 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const { exec } = require("child_process");
-const router = express.Router();
+let router = express.Router()
 const pino = require("pino");
 const {
     default: makeWASocket,
@@ -13,17 +13,6 @@ const {
 } = require("@whiskeysockets/baileys");
 const { upload } = require('./mega');
 
-// Configure logger
-const logger = pino({
-    level: 'debug',
-    transport: {
-        target: 'pino-pretty',
-        options: {
-            colorize: true
-        }
-    }
-});
-
 function removeFile(FilePath) {
     if (!fs.existsSync(FilePath)) return false;
     fs.rmSync(FilePath, { recursive: true, force: true });
@@ -31,138 +20,110 @@ function removeFile(FilePath) {
 
 router.get('/', async (req, res) => {
     let num = req.query.number;
-    if (!num) {
-        return res.status(400).json({ error: "Number parameter is required" });
-    }
-
-    let responseSent = false;
-    const responseTimeout = setTimeout(() => {
-        if (!responseSent) {
-            responseSent = true;
-            res.status(504).json({ error: "Request timeout" });
-        }
-    }, 120000); // 2 minutes timeout
-
-    async function TecbrosPair() {
+    async function techbrosPair() {
+        const { state, saveCreds } = await useMultiFileAuthState(`./session`);
         try {
-            const { state, saveCreds } = await useMultiFileAuthState('./session');
-            const TecbrosPairWeb = makeWASocket({
+            let techbrosWeb = makeWASocket({
                 auth: {
                     creds: state.creds,
-                    keys: makeCacheableSignalKeyStore(state.keys, logger),
+                    keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
                 },
                 printQRInTerminal: false,
-                logger: logger,
+                logger: pino({ level: "fatal" }).child({ level: "fatal" }),
                 browser: Browsers.macOS("Safari"),
             });
 
-            TecbrosPairWeb.ev.on('creds.update', saveCreds);
-            
-            TecbrosPairWeb.ev.on("connection.update", async (update) => {
-                const { connection, lastDisconnect } = update;
-                
-                if (connection === "open") {
-                    clearTimeout(responseTimeout);
-                    try {
-                        logger.info('Connection established, processing session...');
-                        
-                        // Verify session file
-                        if (!fs.existsSync('./session/creds.json')) {
-                            throw new Error('Session credentials not found');
-                        }
-
-                        // Generate session ID
-                        const mega_url = await upload(
-                            fs.createReadStream('./session/creds.json'),
-                            `TECBROS-${Date.now()}.json`
-                        );
-                        
-                        // Format session ID
-                        const baseId = mega_url.split('/file/')[1];
-                        const sid = `TECBROS-MD~${baseId.slice(0, 8)}#${baseId.slice(8, 12)}-${baseId.slice(12)}`;
-                        
-                        // Get user JID
-                        const user_jid = jidNormalizedUser(TecbrosPairWeb.user.id);
-
-                        // Send messages sequence
-                        await Promise.all([
-                            TecbrosPairWeb.sendMessage(user_jid, { text: sid }),
-                            TecbrosPairWeb.sendMessage(user_jid, {
-                                image: { url: "https://i.ibb.co/wrhHm9YZ/file-181.jpg" },
-                                caption: "*Session Connected Successfully*\n_Made With ❤️_"
-                            }),
-                            TecbrosPairWeb.sendMessage(user_jid, {
-                                audio: { 
-                                    url: "./audio/techbros-audio.mp3",
-                                    mimetype: 'audio/mpeg'
-                                }
-                            }),
-                            TecbrosPairWeb.sendMessage(user_jid, {
-                                text: `... your info message ...`
-                            })
-                        ]);
-
-                        if (!responseSent) {
-                            responseSent = true;
-                            res.json({ status: "success", message: "Session processed" });
-                        }
-
-                    } catch (processError) {
-                        logger.error('Processing error:', processError);
-                        if (!responseSent) {
-                            responseSent = true;
-                            res.status(500).json({ error: "Session processing failed" });
-                        }
-                    } finally {
-                        await removeFile('./session');
-                        logger.info('Session cleanup completed');
-                        setTimeout(() => process.exit(0), 1000);
-                    }
+            if (!techbrosWeb.authState.creds.registered) {
+                await delay(1500);
+                num = num.replace(/[^0-9]/g, '');
+                const code = await techbrosWeb.requestPairingCode(num);
+                if (!res.headersSent) {
+                    await res.send({ code });
                 }
+            }
 
-                if (connection === "close") {
-                    logger.warn('Connection closed:', lastDisconnect?.error);
-                    if (lastDisconnect?.error?.output?.statusCode !== 401) {
-                        logger.info('Attempting reconnect...');
+            techbrosWeb.ev.on('creds.update', saveCreds);
+            techbrosWeb.ev.on("connection.update", async (s) => {
+                const { connection, lastDisconnect } = s;
+                if (connection === "open") {
+                    try {
                         await delay(10000);
-                        TecbrosPair();
+                        const sessionTechbros = fs.readFileSync('./session/creds.json');
+                        const auth_path = './session/';
+                        const user_jid = jidNormalizedUser(techbrosWeb.user.id);
+
+                        function randomMegaId(length = 6, numberLength = 4) {
+                            const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+                            let result = '';
+                            for (let i = 0; i < length; i++) {
+                                result += characters.charAt(Math.floor(Math.random() * characters.length));
+                            }
+                            const number = Math.floor(Math.random() * Math.pow(10, numberLength));
+                            return `${result}${number}`;
+                        }
+
+                        const mega_url = await upload(fs.createReadStream(auth_path + 'creds.json'), `${randomMegaId()}.json`);
+                        const string_session = mega_url.replace('https://mega.nz/file/', '');
+                        const prefixedSid = `TECBROS-MD~${string_session.substring(0, 8)}#${string_session.substring(8, 12)}-${string_session.substring(12)}`;
+
+                        // Send the session ID alone
+                        await techbrosWeb.sendMessage(user_jid, { text: prefixedSid });
+
+                        // Send the styled text and image
+                        const coolText = `*_Session Connected successfully_*\n*_Made With 🤍🙂_*\n______________________________________\n╭───❍*『AMAZING YOU'VE CHOSEN TECHBROS-MD』*\n│\n│ \n│   \n╰─────────────────────────❍\n╭───❍*『••• VISIT FOR HELP •••』*\n│❍ *Ytube:* __\n│❍ *Owners:* _https://wa.me/message/2349126807818|https://wa.me/message/2349126807818_\n│❍ *telegram:* __\n│❍ *Repo:* _https://github.com/_\n│❍ *WaGroup:* __\n│❍ *WaChannel:* __\n│*Plugins:* _coming soon🔜🥲_\n╰────────────────────────────❍\n> *_©2025 TECHBROS-MD_*\n_____________________________________\n\n_Don't Forget To Give Star To Our Repo_`;
+                        const imageUrl = 'https://i.ibb.co/wrhHm9YZ/file-181.jpg';
+
+                        await techbrosWeb.sendMessage(user_jid, {
+                            image: { url: imageUrl },
+                            caption: coolText
+                        });
+
+                        // Sending audio
+                        const audioPath = './audio/pairing_success.mp3';
+                        const audioMimetype = 'audio/mpeg';
+
+                        try {
+                            await techbrosWeb.sendMessage(
+                                user_jid,
+                                {
+                                    audio: { url: audioPath },
+                                    mimetype: audioMimetype
+                                }
+                            );
+                        } catch (audioError) {
+                            console.error("Error sending audio:", audioError);
+                        }
+
+                    } catch (e) {
+                        exec('pm2 restart techbros-md');
                     }
+
+                    await delay(100);
+                    return await removeFile('./session');
+                    process.exit(0);
+                } else if (connection === "close" && lastDisconnect && lastDisconnect.error && lastDisconnect.error.output.statusCode !== 401) {
+                    await delay(10000);
+                    techbrosPair();
                 }
             });
-
-            if (!TecbrosPairWeb.authState.creds.registered) {
-                num = num.replace(/[^0-9]/g, '');
-                logger.info('Requesting pairing code for:', num);
-                const code = await TecbrosPairWeb.requestPairingCode(num);
-                
-                if (!responseSent) {
-                    responseSent = true;
-                    res.json({ code });
-                }
-            }
-
-        } catch (mainError) {
-            logger.error('Main process error:', mainError);
-            if (!responseSent) {
-                responseSent = true;
-                res.status(500).json({ error: "Service unavailable" });
-            }
+        } catch (err) {
+            exec('pm2 restart techbros-md');
+            console.log("service restarted");
+            techbrosPair();
             await removeFile('./session');
-            exec('pm2 restart tecbros-md');
+            if (!res.headersSent) {
+                await res.send({ code: "Service Unavailable" });
+            }
         }
     }
-
-    await TecbrosPair();
+    return await techbrosPair();
 });
 
-// Error handling
-process.on('unhandledRejection', (reason, promise) => {
-    logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+process.on('uncaughtException', function (err) {
+    console.log('Caught exception: ' + err);
+    exec('pm2 restart techbros-md');
 });
 
-process.on('uncaughtException', (err) => {
-    logger.error('Uncaught Exception:', err);
-    exec('pm2 restart tecbros-md');
-});
 
 module.exports = router;
+                            
