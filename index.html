@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TECHBROS-MD Pair Code</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+  <style>
+    :root {
+      --neon-cyan: #00f3ff;
+      --neon-purple: #8a2be2;
+      --dark-bg: #0a0f24;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      background: var(--dark-bg);
+      font-family: 'Roboto Mono', monospace;
+      color: #fff;
+      overflow-x: hidden;
+      flex-direction: column; /* Stack items vertically */
+    }
+
+    .container {
+      transform-style: preserve-3d;
+      animation: slideUp 1s ease-out;
+      /* Adjust margin to make space for the contact link at the bottom */
+      margin-bottom: 90px; /* Increased margin for the text */
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(100px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .logo-container {
+      margin-bottom: 2rem;
+      text-align: center;
+      animation: logoEntrance 1s cubic-bezier(0.68, -0.55, 0.27, 1.55) both;
+    }
+
+    @keyframes logoEntrance {
+      0% { transform: scale(0) rotate(-180deg); opacity: 0; }
+      100% { transform: scale(1) rotate(0); opacity: 1; }
+    }
+
+    .logo {
+      width: 150px;
+      filter: drop-shadow(0 0 15px var(--neon-cyan));
+      animation: neonPulse 2s infinite alternate;
+    }
+
+    @keyframes neonPulse {
+      from { filter: drop-shadow(0 0 10px var(--neon-cyan)); }
+      to { filter: drop-shadow(0 0 25px var(--neon-cyan)); }
+    }
+
+    .box {
+      width: 320px;
+      padding: 2rem;
+      background: rgba(16, 44, 87, 0.9);
+      border-radius: 15px;
+      border: 2px solid var(--neon-cyan);
+      box-shadow: 0 0 30px rgba(0, 183, 255, 0.3);
+      animation: boxFloat 3s ease-in-out infinite;
+      text-align: center; /* Center the content inside the box */
+    }
+
+    @keyframes boxFloat {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+
+    #text {
+      font-size: 1.2em;
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
+    }
+
+    .input-area {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .input-container {
+      background: linear-gradient(45deg, #1a1a2e, #16213e);
+      border: 1px solid var(--neon-purple);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      padding: 0.5rem;
+    }
+
+    .input-container input {
+      flex-grow: 1;
+      padding: 0.8rem;
+      border: none;
+      background: transparent;
+      color: #fff;
+      font-family: inherit;
+      font-size: 1em;
+      outline: none;
+    }
+
+    .input-container button {
+      padding: 0.8rem 1.2rem;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(45deg, var(--neon-purple), var(--neon-cyan));
+      color: #fff;
+      font-family: inherit;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 1em;
+      transition: transform 0.1s ease-in-out;
+    }
+
+    .input-container button:hover {
+      transform: scale(1.05);
+    }
+
+    #loading-spinner {
+      display: none;
+      margin-top: 1.5rem;
+      color: var(--neon-cyan);
+      font-size: 1.2em;
+    }
+
+    /* Keyframes for the fading animation */
+    @keyframes fade-in-out {
+      0% { opacity: 0.4; }
+      50% { opacity: 1; }
+      100% { opacity: 0.4; }
+    }
+
+    /* Apply the animation to the loading text */
+    #loading-spinner span {
+      animation: fade-in-out 1.5s infinite;
+    }
+
+    #pair {
+      margin-top: 1.5rem;
+      font-size: 1.4em;
+      font-weight: bold;
+      color: #fff;
+      text-shadow: 0 0 10px var(--neon-cyan);
+    }
+
+    .credits {
+      margin-top: 1.5rem;
+      text-align: center;
+      color: #ccc;
+      font-size: 0.9em;
+    }
+
+    .creator1 {
+      color: var(--neon-cyan);
+    }
+
+    .creator2 {
+      color: var(--neon-purple);
+    }
+
+    .contact-link-container {
+      position: fixed;
+      bottom: 10px; /* Move closer to the bottom */
+      left: 0;
+      width: 100%;
+      text-align: center;
+      animation: slideUpContact 1s ease-out 1.2s both;
+      display: flex; /* Use flex to arrange links */
+      flex-direction: column; /* Arrange items vertically */
+      align-items: center; /* Center items horizontally */
+      gap: 0.5rem; /* Space between the text and links */
+    }
+
+    @keyframes slideUpContact {
+      from { opacity: 0; transform: translateY(50px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .whatsapp-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(0,0,0,0.7);
+      color: #25D366;
+      padding: 0.8rem 1.2rem;
+      border-radius: 30px;
+      text-decoration: none;
+      border: 1px solid #25D366;
+      font-size: 0.9em;
+      filter: drop-shadow(0 0 5px #25D366);
+    }
+
+    .whatsapp-logo {
+      font-size: 1.2em;
+    }
+
+    .contact-us-text {
+      color: #fff;
+      font-size: 0.8em;
+      margin-bottom: 0.3rem;
+    }
+
+    .copyright {
+      margin-top: 2rem; /* Add some space above copyright if contact link is at the bottom */
+      color: var(--neon-cyan);
+      text-align: center;
+      font-size: 0.8em;
+    }
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+    <div class="logo-container">
+      <img src="https://i.ibb.co/wrhHm9YZ/file-181.jpg" class="logo" alt="TECHBROS-MD">
+      <p class="bot-name" style="color: var(--neon-cyan);">TECHBROS-MD</p>
+    </div>
+
+    <div class="box">
+      <div id="text">
+        <i class="fa fa-link fa-lg fa-fw" style="margin-bottom: 1rem; color: var(--neon-cyan);"></i>
+        <h3>Request pairing code</h3>
+        <p style="color: #ccc; font-size: 0.9em; margin-bottom: 1rem;">Enter your WhatsApp number with county code to begin secure pairing.</p>
+      </div>
+      <div class="input-area">
+        <div class="input-container">
+          <input type="tel" id="number" placeholder="e.g., +234912xxxxx">
+          <button id="submit"><i class="fas fa-arrow-right"></i> Pair</button>
+        </div>
+      </div>
+      <div id="loading-spinner" style="display: none;">
+        <span>Pairing, please wait...</span>
+      </div>
+      <main id="pair"></main>
+    </div>
+
+    <div class="credits">
+      Crafted with <i class="fas fa-code" style="color: var(--neon-cyan);"></i> by <span class="creator1">Immanuelシ︎</span> & <span class="creator2">vidz🤟🏻</span>
+    </div>
+
+    <div class="copyright">
+      ©2025 TECHBROS-MD | Ultimate Pairing System
+    </div>
+  </div>
+
+  <div class="contact-link-container">
+    <p class="contact-us-text">Contact Us 👇🏻</p>
+    <a href="https://wa.me/2349126807818" class="whatsapp-link" target="_blank">
+      <i class="fab fa-whatsapp whatsapp-logo"></i> Immanuel
+    </a>
+    <a href="https://wa.me/2349076087791" class="whatsapp-link" target="_blank">
+      <i class="fab fa-whatsapp whatsapp-logo"></i> Vidz
+    </a>
+  </div>
+
+  <script
+  src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.0.0-alpha.1/axios.min.js"
+  ></script>
+  <script>
+    let a = document.getElementById("pair");
+    let b = document.getElementById("submit");
+    let c = document.getElementById("number");
+    const loadingSpinner = document.getElementById("loading-spinner");
+
+    async function Copy() {
+      let text = document.getElementById("copy").innerText;
+      let obj = document.getElementById("copy");
+      await navigator.clipboard.writeText(obj.innerText.replace('CODE: ', ''));
+      obj.innerText = "<i class='fas fa-check-circle' style='color: var(--neon-cyan);'></i> Code Secured!";
+      obj.style = "color: var(--neon-cyan); font-weight: bold;";
+      setTimeout(() => {
+        obj.innerHTML = '<span style="color: #fff;">PAIR CODE:</span> <span style="color: var(--neon-cyan); font-weight: bold;">' + text.replace('CODE: ', '') + '</span>';
+        obj.style = "";
+      }, 1500);
+    }
+
+    b.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const phoneNumber = c.value.trim();
+
+      if (!phoneNumber) {
+        a.innerHTML = '<p style="color: #ff6b6b;">❗ Enter your WhatsApp number with county code.</p>';
+      } else if (!/^\+?[0-9]{7,}$/.test(phoneNumber)) {
+        a.innerHTML = '<p style="color: #ff6b6b;">❗ Invalid number format. Please include the country code (e.g., +234...).</p>';
+      } else {
+        const deviceId = phoneNumber;
+        loadingSpinner.style.display = "block";
+        a.innerHTML = '';
+        // Simulate API call
+        setTimeout(async () => {
+          try {
+            const response = await axios(`/code?deviceId=${deviceId}`);
+            const data = response.data;
+            const code = data.code || "<span style='color: #ff6b6b;'>❗ Pairing Failed</span>";
+            a.innerHTML = '<p id="copy" onclick="Copy()" style="font-weight: bold;"><span style="color: #fff;">PAIR CODE:</span> <span style="color: var(--neon-cyan);">' + code + '</span></p>';
+          } catch (error) {
+            a.innerHTML = '<p style="color: #ff6b6b;">❗ Error fetching code.</p>';
+            console.error("Error fetching code:", error);
+          } finally {
+            loadingSpinner.style.display = "none";
+          }
+        }, 2000); // Simulate loading
+      }
+    });
+
+    // Initial styling for creators
+    const creator1 = document.querySelector('.creator1');
+    const creator2 = document.querySelector('.creator2');
+    if (creator1) creator1.style.color = getComputedStyle(document.documentElement).getPropertyValue('--neon-cyan');
+    if (creator2) creator2.style.color = getComputedStyle(document.documentElement).getPropertyValue('--neon-purple');
+  </script>
+</body>
+</html>
