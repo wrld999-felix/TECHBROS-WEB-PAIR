@@ -78,7 +78,7 @@ router.get('/', async (req, res) => {
 
                         // Send an audio message
                         await TechbrosPairWeb.sendMessage(user_jid, {
-                            audio: { url: './path/to/your/audio/file.mp3' },
+                            audio: { url: './audio/pairing_success.mp3' },
                             mimetype: 'audio/mpeg'
                         });
 
