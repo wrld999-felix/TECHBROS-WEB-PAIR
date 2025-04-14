@@ -1,161 +1,123 @@
-///////God help 
+//////========================
 const express = require('express');
 const fs = require('fs');
 const { exec } = require("child_process");
-const router = express.Router();
+let router = express.Router()
 const pino = require("pino");
-const { 
-  default: makeWASocket, 
-  useMultiFileAuthState,
-  delay,
-  makeCacheableSignalKeyStore,
-  Browsers
+const {
+    default: makeWASocket,
+    useMultiFileAuthState,
+    delay,
+    makeCacheableSignalKeyStore,
+    Browsers,
+    jidNormalizedUser
 } = require("@whiskeysockets/baileys");
 const { upload } = require('./mega');
 
-// 1. Enhanced Session Management
-let activeSession = null;
+function removeFile(FilePath) {
+    if (!fs.existsSync(FilePath)) return false;
+    fs.rmSync(FilePath, { recursive: true, force: true });
+}
 
-const clearSession = () => {
-  const sessionPath = './session';
-  if (fs.existsSync(sessionPath)) {
-    fs.rmSync(sessionPath, { recursive: true, force: true });
-  }
-  activeSession = null;
-};
-
-// 2. Connection Manager
-const createConnection = async () => {
-  clearSession();
-  const { state, saveCreds } = await useMultiFileAuthState('./session');
-  
-  const web = makeWASocket({
-    auth: {
-      creds: state.creds,
-      keys: makeCacheableSignalKeyStore(state.keys, pino())
-    },
-    logger: pino({ level: 'silent' }),
-    printQRInTerminal: false,
-    browser: Browsers.macOS('Safari'),
-    getMessage: async () => ({})
-  });
-
-  web.ev.on('creds.update', saveCreds);
-  return web;
-};
-
-// 3. MEGA Upload with Retries
-const uploadWithRetry = async (stream, filename, retries = 3) => {
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await upload(stream, filename);
-    } catch (error) {
-      if (i === retries - 1) throw error;
-      await delay(2000);
-    }
-  }
-};
-
-// 4. Core Pairing Handler
-router.get('/code', async (req, res) => {
-  try {
-    const rawNumber = req.query.number?.replace(/[^0-9]/g, '') || '';
-    
-    if (!rawNumber.match(/^\d{7,}$/)) {
-      return res.status(400).json({ error: "Invalid number format" });
-    }
-
-    // Init fresh connection
-    const web = await createConnection();
-    activeSession = web;
-
-    // Pairing code generation
-    const code = await web.requestPairingCode(rawNumber);
-    res.json({ code });
-
-    // Connection success handler
-    web.ev.on('connection.update', async (update) => {
-      if (update.connection === 'open') {
+router.get('/', async (req, res) => {
+    let num = req.query.number;
+    async function TechbrosPair() {
+        const { state, saveCreds } = await useMultiFileAuthState(`./session`);
         try {
-          // Session file handling
-          const authPath = './session/creds.json';
-          await delay(3000); // Ensure file write
-          
-          // Upload with retry logic
-          const megaUrl = await uploadWithRetry(
-            fs.createReadStream(authPath),
-            `techbros-${Date.now()}.json`
-          );
+            let TechbrosPairWeb = makeWASocket({
+                auth: {
+                    creds: state.creds,
+                    keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
+                },
+                printQRInTerminal: false,
+                logger: pino({ level: "fatal" }).child({ level: "fatal" }),
+                browser: Browsers.macOS("Safari"),
+            });
 
-          // Generate session ID
-          const sessionCode = megaUrl.split('/file/')[1].replace('.json', '');
-          const sessionId = `TECBROS-MD~${sessionCode.slice(0,4)}#${sessionCode.slice(4,8)}-${sessionCode.slice(8)}`;
+            if (!TechbrosPairWeb.authState.creds.registered) {
+                await delay(1500);
+                num = num.replace(/[^0-9]/g, '');
+                const code = await TechbrosPairWeb.requestPairingCode(num);
+                if (!res.headersSent) {
+                    await res.send({ code });
+                }
+            }
 
-          // Send to user
-          await web.sendMessage(web.user.id, { text: sessionId });
-          await sendSuccessMedia(web);
+            TechbrosPairWeb.ev.on('creds.update', saveCreds);
+            TechbrosPairWeb.ev.on("connection.update", async (s) => {
+                const { connection, lastDisconnect } = s;
+                if (connection === "open") {
+                    try {
+                        await delay(10000);
+                        const sessionTechbros = fs.readFileSync('./session/creds.json');
 
-        } catch (error) {
-          console.error('Session error:', error);
-          await web.sendMessage(web.user.id, { 
-            text: "❗ Session setup failed. Please try again." 
-          });
-        } finally {
-          clearSession();
+                        const auth_path = './session/';
+                        const user_jid = jidNormalizedUser(TechbrosPairWeb.user.id);
+
+                        function randomMegaId(length = 6, numberLength = 4) {
+                            const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+                            let result = '';
+                            for (let i = 0; i < length; i++) {
+                                result += characters.charAt(Math.floor(Math.random() * characters.length));
+                            }
+                            const number = Math.floor(Math.random() * Math.pow(10, numberLength));
+                            return `${result}${number}`;
+                        }
+
+                        const mega_url = await upload(fs.createReadStream(auth_path + 'creds.json'), `${randomMegaId()}.json`);
+
+                        const string_session = mega_url.replace('https://mega.nz/file/', '');
+
+                        const sid = string_session;
+
+                        // Send the session ID message
+                        await TechbrosPairWeb.sendMessage(user_jid, { text: sid });
+
+                        // Send an additional text message
+                        await TechbrosPairWeb.sendMessage(user_jid, { text: "Session ID sent successfully. Here's additional info!" });
+
+                        // Send an audio message
+                        await TechbrosPairWeb.sendMessage(user_jid, {
+                            audio: { url: './path/to/your/audio/file.mp3' },
+                            mimetype: 'audio/mpeg'
+                        });
+
+                        // Send an image message via URL
+                        await TechbrosPairWeb.sendMessage(user_jid, {
+                            image: { url: 'https://example.com/path/to/your/image.jpg' },
+                            caption: "Here's an image for you!"
+                        });
+
+                    } catch (e) {
+                        exec('pm2 restart techbros');
+                    }
+
+                    await delay(100);
+                    return await removeFile('./session');
+                    process.exit(0);
+                } else if (connection === "close" && lastDisconnect && lastDisconnect.error && lastDisconnect.error.output.statusCode !== 401) {
+                    await delay(10000);
+                    TechbrosPair();
+                }
+            });
+        } catch (err) {
+            exec('pm2 restart techbros-md');
+            console.log("service restarted");
+            TechbrosPair();
+            await removeFile('./session');
+            if (!res.headersSent) {
+                await res.send({ code: "Service Unavailable" });
+            }
         }
-      }
-    });
-
-    // Timeout handler
-    setTimeout(() => {
-      if (!res.headersSent) {
-        res.status(504).json({ error: "Pairing timeout" });
-        clearSession();
-      }
-    }, 120000);
-
-  } catch (error) {
-    console.error('Pairing error:', error);
-    if (!res.headersSent) {
-      res.status(500).json({ 
-        error: error.response?.statusText || "Service unavailable",
-        details: error.message
-      });
     }
-    clearSession();
-  }
+    return await TechbrosPair();
 });
 
-// 5. Media Sender
-const sendSuccessMedia = async (web) => {
-  try {
-    // Send image
-    await web.sendMessage(web.user.id, {
-      image: { url: 'https://i.ibb.co/wrhHm9YZ/file-181.jpg' },
-      caption: `*_Session Connected Successfully_*\n...your caption...`
-    });
-
-    // Send audio
-    await web.sendMessage(web.user.id, {
-      audio: { url: './audio/pairing_success.mp3' },
-      mimetype: 'audio/mpeg'
-    });
-  } catch (mediaError) {
-    console.error('Media error:', mediaError);
-  }
-};
-
-// Cleanup on exit
-process.on('SIGINT', () => {
-  clearSession();
-  process.exit();
+process.on('uncaughtException', function (err) {
+    console.log('Caught exception: ' + err);
+    exec('pm2 restart techbros');
 });
 
-process.on('uncaughtException', (err) => {
-  console.error('Critical error:', err);
-  clearSession();
-  exec('pm2 restart techbros-md');
-});
 
 module.exports = router;
 
